@@ -41,8 +41,8 @@ def complete_payment():
     )
     return jsonify(res.json()), res.status_code
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
-
+# ✅ New route for Pi Network domain verification
+@app.route("/validation-key.txt")
+def serve_validation_file():
+    return "69ff105bb1c0488b4ef96ab43a4ec31b7938ea884dd23e39a2447ecc62f13d2cfe777b68c9ad2e45a58c8fd0d29e7e3eb5285cf9348e1a0eb7e5ff96957c1d1d", 200, {'Content-Type': 'text/plain'}
 
