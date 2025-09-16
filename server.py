@@ -12,7 +12,7 @@ def pi_headers():
 
 @app.route("/")
 def home():
-    return "Welcome to Trade Haven Backend - Flask is running ✅"
+    return "Flask backend is running. Trade Haven ✅"
 
 @app.route("/api/pi/approve", methods=["POST"])
 def approve_payment():
@@ -41,8 +41,8 @@ def complete_payment():
     )
     return jsonify(res.json()), res.status_code
 
-# Required by DigitalOcean to set custom port
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
