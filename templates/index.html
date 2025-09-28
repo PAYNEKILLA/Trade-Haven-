@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Trade Haven • Testnet Payment</title>
   <style>
-    body{font-family: system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:#f7f7fb;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:#f7f7fb;margin:0}
     .wrap{max-width:980px;margin:40px auto;padding:0 16px}
-    h1{font-size:48px;line-height:1.1;margin:0 0 8px}
+    h1{font-size:42px;line-height:1.15;margin:0 0 8px}
     p{color:#555}
     .card{background:#fff;border-radius:16px;box-shadow:0 10px 24px rgba(0,0,0,.06);padding:24px;margin-top:24px}
     .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -15,6 +15,7 @@
     input,select{width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:12px;font-size:16px}
     button{width:100%;padding:14px 18px;border:0;border-radius:12px;background:#6b2ae6;color:#fff;font-weight:700;font-size:16px;margin-top:14px}
     .muted{color:#777;font-size:13px;margin-top:8px}
+    .status{position:fixed;bottom:10px;left:10px;right:10px;max-width:980px;margin:0 auto;background:#111;color:#fff;padding:10px 12px;border-radius:10px;font-size:12px;opacity:.95;z-index:9999;white-space:pre-wrap}
   </style>
 </head>
 <body>
@@ -44,88 +45,125 @@
       </div>
 
       <button id="pay-btn" type="button">⚡ Send Test Payment</button>
+      <button id="selftest-btn" type="button" style="background:#0ea5e9">🧪 Run Self‑Test</button>
       <div class="muted">Works only in Pi Browser • Safe test: no mainnet funds are used</div>
     </div>
   </div>
+
+  <div id="status" class="status">Loading…</div>
 
   <!-- Pi SDK -->
   <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 
   <script>
-  document.addEventListener('DOMContentLoaded', async () => {
-    // on-screen status (no console needed)
-    const statusEl = document.createElement('div');
-    statusEl.style.cssText = "position:fixed;bottom:10px;left:10px;background:#111;color:#fff;padding:8px 12px;border-radius:10px;font-size:12px;opacity:.9;z-index:9999";
-    document.body.appendChild(statusEl);
+  (function(){
+    const statusEl = document.getElementById('status');
     const say = (m)=>{ statusEl.textContent = m; };
+    const sayMore = (m)=>{ statusEl.textContent += "\\n" + m; };
 
     const btn = document.getElementById('pay-btn');
-    if (!btn) { alert('❌ pay-btn not found'); return; }
-    btn.type = 'button';
+    const testBtn = document.getElementById('selftest-btn');
 
-    // prove the click is wired
-    btn.addEventListener('click', () => { console.log('click'); alert('✅ Button click detected'); });
-
-    const Pi = window.Pi;
-    if (!Pi) { alert('❌ Pi SDK not loaded. Open this in Pi Browser.'); return; }
-
-    // TESTNET
-    Pi.init({ version: "2.0", sandbox: true });
-    say('Pi SDK initialized (testnet)');
-
-    // authenticate early
-    try {
-      const me = await Pi.authenticate(['payments'], (p)=>console.log('incomplete payment:', p));
-      say('🔐 Auth OK as ' + (me?.username || 'user'));
-    } catch (e) {
-      alert('❌ Auth failed: ' + (e?.message || e));
-      say('Auth failed');
-      return;
+    // ---------- Common helpers ----------
+    function ensurePi() {
+      if (!window.Pi) { say("❌ Pi SDK not loaded. Open this page inside Pi Browser."); return false; }
+      return true;
+    }
+    async function auth() {
+      try {
+        const me = await Pi.authenticate(['payments'], (p)=>console.log('incomplete payment:', p));
+        sayMore('🔐 Auth OK as ' + (me?.username || 'user'));
+        return true;
+      } catch(e) {
+        sayMore('❌ Auth failed: ' + (e?.message || e));
+        return false;
+      }
+    }
+    async function checkBackend() {
+      try {
+        const r = await fetch('/api/pi/approve', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+        const j = await r.json();
+        if (r.status === 400 && j?.error?.includes('paymentId')) {
+          sayMore('🛰️ Backend OK (approve endpoint reachable).');
+          return true;
+        } else {
+          sayMore('⚠️ Backend responded: ' + r.status + ' ' + JSON.stringify(j));
+          return false;
+        }
+      } catch(e) {
+        sayMore('❌ Backend unreachable: ' + (e?.message || e));
+        return false;
+      }
     }
 
-    // payment flow
+    // ---------- Self-Test button ----------
+    testBtn.addEventListener('click', async () => {
+      statusEl.textContent = '🧪 Self‑Test starting…';
+      if (!ensurePi()) return;
+
+      Pi.init({ version: "2.0", sandbox: true });
+      sayMore('Pi SDK initialized (testnet).');
+
+      const okAuth = await auth();
+      if (!okAuth) return;
+
+      const okBack = await checkBackend();
+      if (!okBack) return;
+
+      sayMore('✅ Self‑Test passed. You can try the payment now.');
+      alert('Self‑Test passed. Now tap "Send Test Payment".');
+    });
+
+    // ---------- Payment button ----------
     btn.addEventListener('click', async () => {
+      statusEl.textContent = '⚡ Payment starting…';
+      if (!ensurePi()) { alert('Open in Pi Browser'); return; }
+
+      Pi.init({ version: "2.0", sandbox: true });
+      sayMore('Pi SDK initialized (testnet).');
+
+      const okAuth = await auth();
+      if (!okAuth) { alert('Auth failed — check Dev Portal URL/origin matches exactly.'); return; }
+
+      const amount = Number((document.getElementById('amount').value || '0.001'));
+      const memo   = (document.getElementById('memo').value || 'QA test');
+
       try {
-        alert('📡 Starting payment…');
-        say('Starting createPayment');
-
-        const amount = Number((document.getElementById('amount').value || '0.001'));
-        const memo   = (document.getElementById('memo').value || 'QA test');
-
         await Pi.createPayment({ amount, memo, metadata:{} }, {
           onReadyForServerApproval: async (paymentId) => {
-            say('Approving on server… ' + paymentId);
-            console.log('approve ->', paymentId);
+            sayMore('Approving on server… ' + paymentId);
             await fetch('/api/pi/approve', {
-              method:'POST',
-              headers:{'Content-Type':'application/json'},
+              method:'POST', headers:{'Content-Type':'application/json'},
               body: JSON.stringify({ paymentId })
             });
           },
           onReadyForServerCompletion: async (paymentId, txid) => {
-            say('Completing on server…');
-            console.log('complete ->', paymentId, txid);
+            sayMore('Completing on server… txid=' + txid);
             await fetch('/api/pi/complete', {
-              method:'POST',
-              headers:{'Content-Type':'application/json'},
+              method:'POST', headers:{'Content-Type':'application/json'},
               body: JSON.stringify({ paymentId, txid })
             });
           },
-          onCancel: (id)=>{ alert('❌ Canceled'); say('Canceled'); },
-          onError:  (err,id)=>{ alert('⚠️ Pi error: ' + err); say('Pi error'); },
+          onCancel: (id)=>{ sayMore('❌ Payment canceled'); alert('Payment canceled'); },
+          onError:  (err,id)=>{ sayMore('⚠️ Pi error: ' + err); alert('Pi error: ' + err); },
         });
-
-        alert('✅ Payment flow finished');
-        say('Done');
-      } catch (e) {
-        alert('❌ Payment failed: ' + (e?.message || e));
-        say('Payment failed');
+        sayMore('✅ Payment flow finished'); alert('Payment flow finished');
+      } catch(e) {
+        sayMore('❌ Payment failed: ' + (e?.message || e));
+        alert('Payment failed: ' + (e?.message || e));
       }
     });
-  });
 
-  // catch silent JS errors
-  window.addEventListener('error', e => alert('JS error: ' + e.message));
+    // Initial hint
+    say('Ready. Use 🧪 Self‑Test first, then ⚡ Send Test Payment.');
+  })();
+
+  // Catch any silent script errors
+  window.addEventListener('error', e => {
+    const el = document.getElementById('status');
+    if (el) el.textContent += "\\nJS error: " + e.message;
+    alert('JS error: ' + e.message);
+  });
   </script>
 </body>
 </html>
