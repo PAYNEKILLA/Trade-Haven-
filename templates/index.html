@@ -44,65 +44,88 @@
       </div>
 
       <button id="pay-btn" type="button">⚡ Send Test Payment</button>
-      <div class="muted">You’ll approve this payment in the Pi Browser. No real Pi leaves Testnet.</div>
+      <div class="muted">Works only in Pi Browser • Safe test: no mainnet funds are used</div>
     </div>
   </div>
 
-  <!-- Pi SDK + wiring -->
+  <!-- Pi SDK -->
   <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+
   <script>
   document.addEventListener('DOMContentLoaded', async () => {
+    // on-screen status (no console needed)
+    const statusEl = document.createElement('div');
+    statusEl.style.cssText = "position:fixed;bottom:10px;left:10px;background:#111;color:#fff;padding:8px 12px;border-radius:10px;font-size:12px;opacity:.9;z-index:9999";
+    document.body.appendChild(statusEl);
+    const say = (m)=>{ statusEl.textContent = m; };
+
     const btn = document.getElementById('pay-btn');
-    if (!btn) { console.error('pay-btn not found'); return; }
+    if (!btn) { alert('❌ pay-btn not found'); return; }
     btn.type = 'button';
 
-    // Smoke test so we know clicks are binding
-    btn.addEventListener('click', () => console.log('pay click fired (smoke test)'));
+    // prove the click is wired
+    btn.addEventListener('click', () => { console.log('click'); alert('✅ Button click detected'); });
 
     const Pi = window.Pi;
-    if (!Pi) { console.error('Pi SDK not loaded'); return; }
+    if (!Pi) { alert('❌ Pi SDK not loaded. Open this in Pi Browser.'); return; }
 
     // TESTNET
     Pi.init({ version: "2.0", sandbox: true });
+    say('Pi SDK initialized (testnet)');
 
-    // Must be authenticated with payments scope
+    // authenticate early
     try {
-      await Pi.authenticate(['payments'], (p)=>console.log('incomplete payment:', p));
-      console.log('Pi auth OK');
+      const me = await Pi.authenticate(['payments'], (p)=>console.log('incomplete payment:', p));
+      say('🔐 Auth OK as ' + (me?.username || 'user'));
     } catch (e) {
-      console.error('Pi auth failed:', e);
+      alert('❌ Auth failed: ' + (e?.message || e));
+      say('Auth failed');
+      return;
     }
 
+    // payment flow
     btn.addEventListener('click', async () => {
       try {
-        console.log('starting createPayment');
-        const amount = Number(document.getElementById('amount').value || '0.001');
-        const memo   = document.getElementById('memo').value || 'QA test';
+        alert('📡 Starting payment…');
+        say('Starting createPayment');
+
+        const amount = Number((document.getElementById('amount').value || '0.001'));
+        const memo   = (document.getElementById('memo').value || 'QA test');
+
         await Pi.createPayment({ amount, memo, metadata:{} }, {
           onReadyForServerApproval: async (paymentId) => {
+            say('Approving on server… ' + paymentId);
             console.log('approve ->', paymentId);
             await fetch('/api/pi/approve', {
-              method:'POST', headers:{'Content-Type':'application/json'},
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
               body: JSON.stringify({ paymentId })
             });
           },
           onReadyForServerCompletion: async (paymentId, txid) => {
+            say('Completing on server…');
             console.log('complete ->', paymentId, txid);
             await fetch('/api/pi/complete', {
-              method:'POST', headers:{'Content-Type':'application/json'},
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
               body: JSON.stringify({ paymentId, txid })
             });
           },
-          onCancel: (id)=>console.warn('payment canceled', id),
-          onError:  (err,id)=>console.error('Pi SDK error', err, id),
+          onCancel: (id)=>{ alert('❌ Canceled'); say('Canceled'); },
+          onError:  (err,id)=>{ alert('⚠️ Pi error: ' + err); say('Pi error'); },
         });
-        alert('Payment flow finished ✅');
+
+        alert('✅ Payment flow finished');
+        say('Done');
       } catch (e) {
-        console.error('caught error', e);
-        alert('Payment failed ❌ — open console for details');
+        alert('❌ Payment failed: ' + (e?.message || e));
+        say('Payment failed');
       }
     });
   });
+
+  // catch silent JS errors
+  window.addEventListener('error', e => alert('JS error: ' + e.message));
   </script>
 </body>
 </html>
