@@ -4,11 +4,11 @@ from flask import Flask, request, jsonify, render_template
 
 app = Flask(__name__, template_folder='templates')
 
-PI_API_KEY = os.getenv("PI_API_KEY")
+PI_API_KEY = os.getenv(9zdjoxddceqxihlpir4f64fr6es6sk4782vjlou8efvjgcgpf00q79kuui5ub2of)
 PI_API_BASE = "https://api.minepi.com"
 
 def pi_headers():
-    return {"Authorization": f"Key {PI_API_KEY}"}
+    return {"Authorization": f"Key {9zdjoxddceqxihlpir4f64fr6es6sk4782vjlou8efvjgcgpf00q79kuui5ub2of}"}
 
 @app.route("/")
 def home():
